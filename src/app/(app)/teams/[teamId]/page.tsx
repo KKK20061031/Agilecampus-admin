@@ -138,6 +138,20 @@ export default async function TeamHomePage({
         </Link>
       </section>
 
+      {/* 决策记录 */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-primary" />
+          <h2 className="font-display text-base font-semibold text-ink">决策记录</h2>
+          <Link href={`/teams/${teamId}/decisions`} className="ml-auto text-sm text-primary hover:underline">
+            查看决策记录 →
+          </Link>
+        </div>
+        <Link href={`/teams/${teamId}/decisions`} className="ac-card block p-4 text-sm text-ink-soft hover:border-primary">
+          记录小组每个决策最终采用哪个方案、谁确认、何时确认。
+        </Link>
+      </section>
+
       {/* 成员 */}
       <Section title="成员" count={members.length} href={`/teams/${teamId}/members`}>
         {members.length === 0 ? (

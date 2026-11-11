@@ -774,3 +774,22 @@ export const meetingActionItems = pgTable("meeting_action_items", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("meeting_action_items_meeting_due_idx").on(t.meetingId, t.dueDate)]);
+
+export const decisionStatusEnum = pgEnum("decision_status", ["pending", "confirmed"]);
+export type DecisionStatus = (typeof decisionStatusEnum.enumValues)[number];
+
+// 小组决策记录：记录“最终采用哪个方案、谁确认、何时确认”。
+// 待确认（pending）→ 确认（confirmed）时写入 confirmedById / confirmedAt，二者成对出现。
+export const teamDecisions = pgTable("team_decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  context: text("context").notNull().default(""),
+  finalOption: text("final_option").notNull(),
+  status: decisionStatusEnum("status").notNull().default("pending"),
+  confirmedById: uuid("confirmed_by_id").references(() => users.id, { onDelete: "set null" }),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("team_decisions_team_created_idx").on(t.teamId, t.createdAt)]);
