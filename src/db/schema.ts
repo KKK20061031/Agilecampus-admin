@@ -741,3 +741,34 @@ export const weeklyReports = pgTable(
     index("weekly_reports_project_idx").on(t.projectId),
   ],
 );
+
+export const meetingActionStatusEnum = pgEnum("meeting_action_status", ["open", "done"]);
+export type MeetingActionStatus = (typeof meetingActionStatusEnum.enumValues)[number];
+
+// 团队会议记录与对应的可跟踪行动项。
+export const teamMeetings = pgTable("team_meetings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  timeZone: text("time_zone").notNull().default("UTC"),
+  location: text("location"),
+  agenda: text("agenda").notNull().default(""),
+  minutes: text("minutes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("team_meetings_team_starts_idx").on(t.teamId, t.startsAt)]);
+
+export const meetingActionItems = pgTable("meeting_action_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  meetingId: uuid("meeting_id").notNull().references(() => teamMeetings.id, { onDelete: "cascade" }),
+  createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  details: text("details").notNull().default(""),
+  dueDate: date("due_date"),
+  status: meetingActionStatusEnum("status").notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("meeting_action_items_meeting_due_idx").on(t.meetingId, t.dueDate)]);

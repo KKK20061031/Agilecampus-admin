@@ -124,6 +124,20 @@ export default async function TeamHomePage({
         </div>
       </section>
 
+      {/* 会议与行动项 */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-primary" />
+          <h2 className="font-display text-base font-semibold text-ink">会议与行动项</h2>
+          <Link href={`/teams/${teamId}/meetings`} className="ml-auto text-sm text-primary hover:underline">
+            查看会议记录 →
+          </Link>
+        </div>
+        <Link href={`/teams/${teamId}/meetings`} className="ac-card block p-4 text-sm text-ink-soft hover:border-primary">
+          记录团队议程与纪要，为成员分配行动项并跟进截止日期和完成状态。
+        </Link>
+      </section>
+
       {/* 成员 */}
       <Section title="成员" count={members.length} href={`/teams/${teamId}/members`}>
         {members.length === 0 ? (

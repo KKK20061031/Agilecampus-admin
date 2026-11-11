@@ -166,7 +166,19 @@ export function AppSidebar({
                 </span>
               </div>
               {expanded &&
-                t.projects.map((p) => (
+                <>
+                <Link
+                  href={`/teams/${t.id}/meetings`}
+                  className={`flex items-center gap-2 rounded-field py-1.5 pl-9 pr-2 text-[13px] ${
+                    pathname.startsWith(`/teams/${t.id}/meetings`)
+                      ? "bg-white/15 text-white"
+                      : "text-white/60 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span className="h-1 w-1 shrink-0 rounded-full bg-white/40" />
+                  <span className="truncate">会议与行动项</span>
+                </Link>
+                {t.projects.map((p) => (
                   <Link
                     key={p.id}
                     href={scopedHref(`/projects/${p.id}`, focusedTeam?.id)}
@@ -180,6 +192,8 @@ export function AppSidebar({
                     <span className="truncate">{p.name}</span>
                   </Link>
                 ))}
+                </>
+                }
             </div>
           );
         })}
