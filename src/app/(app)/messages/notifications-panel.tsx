@@ -26,6 +26,7 @@ const TYPE_LABEL: Record<string, string> = {
   task_due_soon: "到期提醒",
   asset_created: "新资产",
   chat_mentioned: "群聊提及",
+  course_assignment_due: "课程作业",
 };
 
 // 这些类型的通知在副标题里展示操作者（公告另走「发布者」）

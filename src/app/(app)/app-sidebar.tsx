@@ -59,6 +59,8 @@ export function AppSidebar({
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3">
         <NavItem href={workbenchHref} label="工作台" icon="▦" active={isActive("/projects")} />
         <NavItem href={scopedHref("/tasks", focusedTeam?.id)} label="我的任务" icon="✓" active={isActive("/tasks")} />
+        <NavItem href={scopedHref("/calendar", focusedTeam?.id)} label="截止日历" icon="▦" active={isActive("/calendar")} />
+        <NavItem href="/settings/profile" label="个人信息" icon="◉" active={isActive("/settings/profile")} />
         {focusedTeam && (
           <div className="rounded-field bg-white/10 px-2.5 py-2 text-xs text-white/85">
             <p className="truncate">专注于 {focusedTeam.name}</p>
@@ -125,11 +127,6 @@ export function AppSidebar({
           </button>
           {settingsOpen && (
             <>
-              <SidebarSubLink
-                href="/settings/profile"
-                label="技能标签"
-                active={pathname.startsWith("/settings/profile")}
-              />
               <SidebarSubLink
                 href="/settings/tokens"
                 label="访问令牌"
@@ -204,7 +201,7 @@ export function AppSidebar({
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white text-sm font-semibold text-navy">
           {userName?.trim()?.[0] ?? "我"}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm text-white/90">{userName ?? "未登录"}</span>
+        <Link href="/settings/profile" className="min-w-0 flex-1 truncate text-sm text-white/90 hover:text-white" title="个人信息">{userName ?? "未登录"}</Link>
         <form action={logoutAction}>
           <button className="text-xs text-white/60 hover:text-white">退出</button>
         </form>

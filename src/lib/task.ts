@@ -4,6 +4,7 @@ import type { DbTx } from "@/db";
 import {
   labels,
   milestones,
+  iterations,
   taskAssignees,
   taskDependencies,
   taskLabels,
@@ -122,6 +123,12 @@ async function validateMilestone(projectId: string, milestoneId: string) {
   if (!m) throw new AppError("里程碑不属于该项目");
 }
 
+async function validateIteration(projectId: string, iterationId: string) {
+  const [iteration] = await db.select({ id: iterations.id }).from(iterations)
+    .where(and(eq(iterations.id, iterationId), eq(iterations.projectId, projectId)));
+  if (!iteration) throw new AppError("迭代不属于该项目");
+}
+
 // 父任务须存在且同项目——防跨项目挂载
 async function validateParentTask(projectId: string, parentTaskId: string) {
   const [p] = await db
@@ -198,6 +205,7 @@ export async function createTask(
     startDate?: string;
     dueDate?: string;
     milestoneId?: string;
+    iterationId?: string;
     priority?: TaskPriority;
     parentTaskId?: string;
   },
@@ -210,6 +218,7 @@ export async function createTask(
   );
   if (assigneeIds.length > 0) await validateAssignees(access.project.teamId, assigneeIds);
   if (input.milestoneId) await validateMilestone(projectId, input.milestoneId);
+  if (input.iterationId) await validateIteration(projectId, input.iterationId);
   if (input.parentTaskId) await validateParentTask(projectId, input.parentTaskId);
 
   const [task] = await exec
@@ -224,6 +233,7 @@ export async function createTask(
       startDate: input.startDate,
       dueDate: input.dueDate,
       milestoneId: input.milestoneId,
+      iterationId: input.iterationId,
       parentTaskId: input.parentTaskId,
       priority: input.priority ?? "medium",
       sortOrder: Date.now(),
@@ -243,6 +253,7 @@ export async function createTask(
       assigneeIds,
       assigneeId: task.assigneeId,
       dueDate: task.dueDate,
+      iterationId: task.iterationId,
       priority: task.priority,
     },
     tx: opts?.tx,
@@ -496,6 +507,7 @@ export async function listProjectTasks(actorId: string, projectId: string) {
       dueDate: tasks.dueDate,
       sortOrder: tasks.sortOrder,
       milestoneId: tasks.milestoneId,
+      iterationId: tasks.iterationId,
       parentTaskId: tasks.parentTaskId,
       assigneeId: tasks.assigneeId,
       assigneeName: users.name,

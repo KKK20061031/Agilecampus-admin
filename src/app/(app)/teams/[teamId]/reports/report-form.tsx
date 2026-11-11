@@ -7,18 +7,19 @@ export function ReportForm({
   teamId,
   projects,
   defaultProjectId,
+  defaultStart,
+  today,
 }: {
   teamId: string;
   projects: { id: string; name: string }[];
   defaultProjectId?: string | null;
+  defaultStart: string;
+  today: string;
 }) {
   const [state, formAction, pending] = useActionState<ReportFormState, FormData>(
     generateReportAction,
     null,
   );
-
-  const today = new Date().toLocaleDateString("sv-SE");
-  const defaultStart = new Date(Date.now() - 6 * 86_400_000).toLocaleDateString("sv-SE");
 
   return (
     <form action={formAction} className="ac-card space-y-3 p-4">
@@ -53,7 +54,7 @@ export function ReportForm({
         包含风险与下周计划
       </label>
 
-      {state?.error && <p className="text-sm text-high">{state.error}</p>}
+      {state && "error" in state && <p className="text-sm text-high">{state.error}</p>}
       <button disabled={pending} className="ac-btn">
         {pending ? "生成中…" : "生成并保存草稿"}
       </button>

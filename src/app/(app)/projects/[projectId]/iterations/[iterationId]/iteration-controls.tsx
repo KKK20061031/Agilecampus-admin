@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { updateIterationAction, deleteIterationAction, type IterationFormState } from "./actions";
+import { updateIterationAction, deleteIterationAction, type IterationFormState } from "../actions";
 
 export function IterationControls({
   projectId,
@@ -50,11 +50,11 @@ export function IterationControls({
         </button>
       </form>
 
-      {updateState?.error && <p className="text-sm text-high">{updateState.error}</p>}
+      {updateState && "error" in updateState && <p className="text-sm text-high">{updateState.error}</p>}
       {updateState && "ok" in updateState && updateState.warning && (
         <p className="text-sm text-medium">{updateState.warning}</p>
       )}
-      {deleteState?.error && <p className="text-sm text-high">{deleteState.error}</p>}
+      {deleteState && "error" in deleteState && <p className="text-sm text-high">{deleteState.error}</p>}
     </div>
   );
 }

@@ -31,6 +31,7 @@ export type BoardTask = {
   milestoneId: string | null;
   labels: { id: string; name: string; color: string }[];
 };
+type SortBy = "manual" | "priority" | "dueDate";
 
 function Column({
   column,
@@ -106,7 +107,7 @@ export function Board({
 }) {
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"manual" | "priority" | "dueDate">("manual");
+  const [sortBy, setSortBy] = useState<SortBy>("manual");
   const [optimisticTasks, moveOptimistic] = useOptimistic(
     tasks,
     (current, move: { taskId: string; patch: ColumnPatch }) =>
@@ -175,7 +176,7 @@ export function Board({
         <select
           id="sort-select"
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as any)}
+          onChange={(e) => setSortBy(e.target.value as SortBy)}
           className="ac-input h-8 px-2 text-sm"
         >
           <option value="manual">手动排序</option>

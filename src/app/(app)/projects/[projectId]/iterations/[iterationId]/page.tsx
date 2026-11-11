@@ -6,7 +6,6 @@ import { getIteration, getIterationStats } from "@/lib/iteration";
 import { listProjectTasks } from "@/lib/task";
 import { buildBurndown } from "@/lib/burndown";
 import { BackButton } from "@/components/back-button";
-import Link from "next/link";
 import { scopedHref } from "@/lib/workbench-navigation";
 import { IterationControls } from "./iteration-controls";
 import { BurndownChart } from "./burndown-chart";

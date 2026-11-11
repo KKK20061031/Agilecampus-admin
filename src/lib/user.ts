@@ -1,15 +1,17 @@
 import { db } from "@/db";
-import { users } from "@/db/schema";
+import { userProfiles, users } from "@/db/schema";
 import { and, eq, ne, or } from "drizzle-orm";
 import { hashPassword } from "./password";
 import { AppError, isUniqueViolation } from "./errors";
 import { normalizeSkillTags } from "./skill-tags";
+import { profileSchema, type ProfileInput } from "./profile";
 
 export async function createUser(input: {
   email: string;
   password: string;
   name: string;
   studentId?: string;
+  profile?: ProfileInput;
 }) {
   const email = input.email.toLowerCase();
   const studentId = input.studentId?.trim();
@@ -23,14 +25,24 @@ export async function createUser(input: {
 
   const passwordHash = await hashPassword(input.password);
   try {
-    const [user] = await db
-      .insert(users)
-      .values({ email, passwordHash, name: input.name, studentId: studentId || null })
-      .returning({ id: users.id, email: users.email, name: users.name });
-    return user;
+    return await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({ email, passwordHash, name: input.name, studentId: studentId || null })
+        .returning({ id: users.id, email: users.email, name: users.name });
+      if (input.profile) {
+        await tx.insert(userProfiles).values({ userId: user.id, ...profileSchema.parse(input.profile) });
+      }
+      return user;
+    });
   } catch (e) {
     // 查重与插入之间的并发窗口：另一请求已抢先注册，由 DB 唯一约束兜底
-    if (isUniqueViolation(e)) throw new AppError("该邮箱或学号已被注册");
+    if (isUniqueViolation(e)) {
+      const [conflict] = await db.select({ email: users.email, studentId: users.studentId })
+        .from(users)
+        .where(or(eq(users.email, email), studentId ? eq(users.studentId, studentId) : undefined));
+      throw new AppError(conflict?.email === email ? "该邮箱已被注册" : "该学号已被注册");
+    }
     throw e;
   }
 }

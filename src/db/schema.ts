@@ -38,6 +38,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "team_join_approved",
   "team_join_rejected",
   "weekly_report_published",
+  "course_assignment_due",
 ]);
 export type NotificationType = (typeof notificationTypeEnum.enumValues)[number];
 
@@ -73,6 +74,40 @@ export const users = pgTable("users", {
   skillTags: text("skill_tags").array().notNull().default(sql`'{}'::text[]`),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// 个人资料独立于登录凭据；公开字段由本人逐项选择，默认全部隐藏。
+export const userProfiles = pgTable("user_profiles", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  school: text("school"),
+  grade: text("grade"),
+  major: text("major"),
+  gender: text("gender"),
+  contact: text("contact"),
+  personalEmail: text("personal_email"),
+  visibleFields: text("visible_fields").array().notNull().default(sql`'{}'::text[]`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 课程作业仅归创建者所有；项目任务继续使用 tasks，不在此重复保存。
+export const courseAssignments = pgTable("course_assignments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseName: text("course_name").notNull(),
+  title: text("title").notNull(),
+  details: text("details"),
+  dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+  timeZone: text("time_zone").notNull().default("UTC"),
+  remindDays: integer("remind_days").array().notNull().default(sql`'{1,3,7}'::integer[]`),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("course_assignments_user_due_idx").on(t.userId, t.dueAt)]);
+
+export const courseAssignmentReminderDeliveries = pgTable("course_assignment_reminder_deliveries", {
+  assignmentId: uuid("assignment_id").notNull().references(() => courseAssignments.id, { onDelete: "cascade" }),
+  daysBefore: integer("days_before").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.assignmentId, t.daysBefore] })]);
 
 export const teams = pgTable("teams", {
   id: uuid("id").primaryKey().defaultRandom(),

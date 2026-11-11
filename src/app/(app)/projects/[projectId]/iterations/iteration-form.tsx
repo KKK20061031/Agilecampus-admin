@@ -29,7 +29,7 @@ export function IterationForm({ projectId }: { projectId: string }) {
         <option value="active">进行中</option>
         <option value="done">已完成</option>
       </select>
-      {state?.error && <p className="text-sm text-high">{state.error}</p>}
+      {state && "error" in state && <p className="text-sm text-high">{state.error}</p>}
       {state && "ok" in state && state.warning && (
         <p className="text-sm text-medium">{state.warning}</p>
       )}

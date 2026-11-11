@@ -41,6 +41,16 @@ type Message = {
 
 type Member = { id: string; name: string };
 
+type PublicProfile = {
+  name: string;
+  school: string | null;
+  grade: string | null;
+  major: string | null;
+  gender: string | null;
+  contact: string | null;
+  personalEmail: string | null;
+};
+
 type Room = { roomId: string; title: string; type: "group" | "dm"; canManageImportant?: boolean };
 
 const POLL_MS = 4000;
@@ -100,6 +110,11 @@ export function ChatApp({
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileTarget, setProfileTarget] = useState<Member | null>(null);
+  const [profileData, setProfileData] = useState<PublicProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const profileRequest = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const unreadTotalRef = useRef<number | null>(null);
@@ -122,6 +137,7 @@ export function ChatApp({
   }
 
   function selectRoom(room: Room) {
+    closeProfile();
     setSelected(room);
     setMessages([]);
     setMembers([]);
@@ -133,6 +149,35 @@ export function ChatApp({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ roomId: room.roomId }),
     }).catch(() => {});
+  }
+
+  function closeProfile() {
+    profileRequest.current += 1;
+    setProfileTarget(null);
+    setProfileData(null);
+    setProfileError(null);
+    setProfileLoading(false);
+  }
+
+  async function openProfile(member: Member) {
+    if (!selected || selected.type !== "group") return;
+    const request = ++profileRequest.current;
+    setProfileTarget(member);
+    setProfileData(null);
+    setProfileError(null);
+    setProfileLoading(true);
+    try {
+      const params = new URLSearchParams({ roomId: selected.roomId, userId: member.id });
+      const res = await fetch(`/api/messages/profile?${params}`, { cache: "no-store" });
+      const data = await res.json();
+      if (request !== profileRequest.current) return;
+      if (!res.ok) setProfileError(data.error ?? "加载失败");
+      else setProfileData(data.profile);
+    } catch {
+      if (request === profileRequest.current) setProfileError("网络异常，请重试");
+    } finally {
+      if (request === profileRequest.current) setProfileLoading(false);
+    }
   }
 
   // 深链：从通知「群聊提及」跳来时按 roomId 自动打开对应会话
@@ -453,8 +498,8 @@ export function ChatApp({
   const otherMembers = members.filter((m) => m.id !== userId);
 
   return (
-    <div className="flex gap-4">
-      <aside className="w-64 shrink-0 space-y-5">
+    <div className="flex flex-col gap-4 lg:flex-row">
+      <aside className="w-full shrink-0 space-y-5 lg:w-64">
         {/* 会话列表：置顶 →（未读优先时）未读 → 最近活动倒序 */}
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
@@ -564,7 +609,7 @@ export function ChatApp({
         </div>
       </aside>
 
-      <section className="flex min-h-[70vh] flex-1 flex-col ac-card overflow-hidden">
+      <section className="flex min-h-[60vh] min-w-0 flex-1 flex-col ac-card overflow-hidden lg:min-h-[70vh]">
         {selected ? (
           <>
             <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -618,8 +663,8 @@ export function ChatApp({
                   {selected.type === "group" && !m.mine ? (
                     <button
                       type="button"
-                      onClick={() => openDm(m.senderId, m.senderName)}
-                      title={`与 ${m.senderName} 私聊`}
+                      onClick={() => void openProfile({ id: m.senderId, name: m.senderName })}
+                      title={`查看 ${m.senderName} 的个人信息`}
                       className="shrink-0"
                     >
                       <Avatar name={m.senderName} size="sm" />
@@ -629,7 +674,9 @@ export function ChatApp({
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium text-ink">{m.senderName}</span>
+                      {selected.type === "group" && !m.mine ? (
+                        <button type="button" onClick={() => void openProfile({ id: m.senderId, name: m.senderName })} className="text-sm font-medium text-ink hover:text-primary">{m.senderName}</button>
+                      ) : <span className="text-sm font-medium text-ink">{m.senderName}</span>}
                       <span className="text-xs text-ink-faint">{fmtTime(m.createdAt)}</span>
                       {m.flags?.isImportant && (
                         <span className="ac-badge bg-accent-soft text-accent">重要</span>
@@ -712,7 +759,7 @@ export function ChatApp({
       </section>
 
       {selected?.type === "group" && (
-        <aside className="w-48 shrink-0 space-y-2">
+        <aside className="w-full shrink-0 space-y-2 lg:w-48">
           <h2 className="text-sm font-semibold text-ink">群成员</h2>
           {otherMembers.length === 0 ? (
             <p className="text-xs text-ink-faint">暂无成员</p>
@@ -722,8 +769,8 @@ export function ChatApp({
                 <li key={m.id}>
                   <button
                     type="button"
-                    onClick={() => openDm(m.id, m.name)}
-                    title={`与 ${m.name} 私聊`}
+                    onClick={() => void openProfile(m)}
+                    title={`查看 ${m.name} 的个人信息`}
                     className="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-sm text-ink transition-colors hover:bg-primary-soft"
                   >
                     <Avatar name={m.name} size="sm" />
@@ -734,6 +781,34 @@ export function ChatApp({
             </ul>
           )}
         </aside>
+      )}
+
+      {profileTarget && (
+        <div role="dialog" aria-modal="true" aria-labelledby="member-profile-title" className="fixed inset-0 z-50 flex items-start justify-center bg-ink/45 p-4 sm:items-center" onKeyDown={(e) => { if (e.key === "Escape") closeProfile(); }}>
+          <div className="max-h-[calc(100vh-2rem)] w-full max-w-sm space-y-4 overflow-y-auto rounded-field bg-surface p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3"><Avatar name={profileTarget.name} />
+                <h2 id="member-profile-title" className="font-display text-lg font-semibold text-ink">{profileTarget.name}</h2>
+              </div>
+              <button type="button" onClick={closeProfile} aria-label="关闭个人信息" autoFocus className="text-xl text-ink-soft">×</button>
+            </div>
+            {profileLoading && <p className="text-sm text-ink-soft">加载中…</p>}
+            {profileError && <p className="text-sm text-high">{profileError}</p>}
+            {profileData && (
+              <div className="space-y-2 border-t border-line pt-3 text-sm">
+                {([ ["school", "学校"], ["grade", "年级"], ["major", "专业"], ["gender", "性别"], ["contact", "联系方式"], ["personalEmail", "个人邮箱"] ] as const).filter(([field]) => profileData[field]).map(([field, label]) => (
+                  <div key={field} className="flex gap-3"><span className="w-16 shrink-0 text-ink-soft">{label}</span><span className="break-all text-ink">{profileData[field]}</span></div>
+                ))}
+                {!Object.entries(profileData).some(([field, value]) => field !== "name" && value) && <p className="text-ink-faint">该成员尚未公开其他信息</p>}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => { const member = profileTarget; closeProfile(); void openDm(member.id, member.name); }}
+              className="ac-btn w-full"
+            >发起私聊</button>
+          </div>
+        </div>
       )}
     </div>
   );

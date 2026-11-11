@@ -5,9 +5,24 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { updateMySkillTags, updateMyStudentId } from "@/lib/user";
 import { AppError } from "@/lib/errors";
+import { profileFromFormData, updateMyProfile } from "@/lib/profile";
 
 export type SkillTagsState = { error: string } | { ok: true } | null;
 export type StudentIdState = { error: string } | { ok: true } | null;
+export type ProfileState = { error: string } | { ok: true } | null;
+
+export async function updateProfileAction(_prev: ProfileState, formData: FormData): Promise<ProfileState> {
+  const session = await auth();
+  if (!session?.user) return { error: "请先登录" };
+  try {
+    await updateMyProfile(session.user.id, profileFromFormData(formData));
+  } catch (e) {
+    if (e instanceof z.ZodError) return { error: e.issues[0].message };
+    throw e;
+  }
+  revalidatePath("/settings/profile");
+  return { ok: true };
+}
 
 const studentIdSchema = z.string().trim().regex(/^\d{14}$/, "学号须为 14 位数字");
 

@@ -5,7 +5,7 @@ import { getTeamMembership } from "@/lib/team";
 import { isTeamLead } from "@/lib/team-permissions";
 import { getWeeklyReportForUser } from "@/lib/weekly-report";
 import { BackButton } from "@/components/back-button";
-import { MarkdownBody } from "@/components/markdown-body";
+import { MarkdownBody } from "../../../../projects/[projectId]/docs/markdown";
 import { ReportControls } from "./report-controls";
 import { ReportEditForm } from "./report-edit-form";
 

@@ -8,6 +8,7 @@ import { listMyTeamsWithProjects } from "@/lib/project";
 import { AppSidebar } from "./app-sidebar";
 import { DueReminderBanner } from "./due-reminder-banner";
 import { getWorkbenchReminders } from "@/lib/workbench-reminders";
+import { syncMyCourseReminders } from "@/lib/course-reminders";
 
 export default async function AppLayout({
   children,
@@ -18,6 +19,7 @@ export default async function AppLayout({
   if (!session?.user) redirect("/login");
   // 进入应用即生成临期/逾期提醒（按天去重），再统计未读，使角标即时反映
   await syncDueSoonNotifications(session.user.id);
+  await syncMyCourseReminders(session.user.id);
   const [unreadCount, unreadChats, teams, reminders] = await Promise.all([
     countUnreadNotifications(session.user.id),
     countUnreadChats(session.user.id),

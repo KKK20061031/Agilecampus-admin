@@ -41,6 +41,8 @@ export default async function ReportsPage({
   const sp = await searchParams;
   const defaultProjectId =
     typeof sp.project === "string" && z.uuid().safeParse(sp.project).success ? sp.project : null;
+  const today = new Date().toLocaleDateString("sv-SE");
+  const defaultStart = new Date(new Date().getTime() - 6 * 86_400_000).toLocaleDateString("sv-SE");
 
   return (
     <main className="mx-auto max-w-3xl space-y-6">
@@ -52,7 +54,7 @@ export default async function ReportsPage({
         </p>
       </header>
 
-      <ReportForm teamId={teamId} projects={projectRows} defaultProjectId={defaultProjectId} />
+      <ReportForm teamId={teamId} projects={projectRows} defaultProjectId={defaultProjectId} defaultStart={defaultStart} today={today} />
 
       <section className="space-y-3">
         <h2 className="font-medium text-ink">历史周报（{reports.length}）</h2>
