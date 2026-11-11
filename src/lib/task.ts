@@ -208,6 +208,8 @@ export async function createTask(
     iterationId?: string;
     priority?: TaskPriority;
     parentTaskId?: string;
+    /** 将群聊消息转为任务时使用，普通任务为空。 */
+    sourceMessageId?: string;
   },
   opts?: { tx?: DbTx; actorType?: "human" | "ai" | "system" },
 ) {
@@ -235,6 +237,7 @@ export async function createTask(
       milestoneId: input.milestoneId,
       iterationId: input.iterationId,
       parentTaskId: input.parentTaskId,
+      sourceMessageId: input.sourceMessageId,
       priority: input.priority ?? "medium",
       sortOrder: Date.now(),
     })

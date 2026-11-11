@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { projects, taskDependencies, taskEvents, tasks, teamMembers, teams, users } from "@/db/schema";
+import { meetingActionItems, projects, taskDependencies, taskEvents, tasks, teamMeetings, teamMembers, teams, users } from "@/db/schema";
 import { alias } from "drizzle-orm/pg-core";
 import { toDayString, todayStartMs } from "./due";
 import { listMyProjects } from "./project";
@@ -144,6 +144,43 @@ async function listRecentActivity(projectIds: string[], teamId?: string | null) 
   });
 }
 
+async function listUpcomingMeetings(teamIds: string[]) {
+  if (teamIds.length === 0) return [];
+  return db.select({
+    id: teamMeetings.id,
+    teamId: teams.id,
+    teamName: teams.name,
+    title: teamMeetings.title,
+    startsAt: teamMeetings.startsAt,
+    timeZone: teamMeetings.timeZone,
+  }).from(teamMeetings)
+    .innerJoin(teams, eq(teamMeetings.teamId, teams.id))
+    .where(and(inArray(teamMeetings.teamId, teamIds), gte(teamMeetings.startsAt, new Date())))
+    .orderBy(asc(teamMeetings.startsAt))
+    .limit(5);
+}
+
+async function listOpenMeetingActions(teamIds: string[]) {
+  if (teamIds.length === 0) return [];
+  return db.select({
+    id: meetingActionItems.id,
+    meetingId: teamMeetings.id,
+    teamId: teams.id,
+    teamName: teams.name,
+    meetingTitle: teamMeetings.title,
+    title: meetingActionItems.title,
+    dueDate: meetingActionItems.dueDate,
+    assigneeId: meetingActionItems.assigneeId,
+    assigneeName: users.name,
+  }).from(meetingActionItems)
+    .innerJoin(teamMeetings, eq(meetingActionItems.meetingId, teamMeetings.id))
+    .innerJoin(teams, eq(teamMeetings.teamId, teams.id))
+    .leftJoin(users, eq(meetingActionItems.assigneeId, users.id))
+    .where(and(inArray(teamMeetings.teamId, teamIds), eq(meetingActionItems.status, "open")))
+    .orderBy(sql`${meetingActionItems.dueDate} asc nulls last`, asc(meetingActionItems.createdAt))
+    .limit(6);
+}
+
 async function listTodos(actorId: string, projectIds: string[], teamId?: string | null) {
   // Sort before limiting, otherwise an early query limit can hide the most overdue tasks.
   const rows = await listTasksInScope(actorId, projectIds, 6);
@@ -168,14 +205,17 @@ export async function getDashboardData(actorId: string, teamId?: string | null) 
   ]);
   const projects = allProjects.filter((p) => !scope.selectedTeam || p.teamId === scope.selectedTeam.id);
   const teamIds = scope.teams.map((t) => t.id);
+  const viewTeamIds = scope.selectedTeam ? [scope.selectedTeam.id] : teamIds;
   const projectIds = projects.map((p) => p.id);
 
-  const [stats, activity, todos, assetCount, health] = await Promise.all([
+  const [stats, activity, todos, assetCount, health, upcomingMeetings, meetingActions] = await Promise.all([
     getTaskStats(actorId, projectIds),
     listRecentActivity(projectIds, teamId),
     listTodos(actorId, projectIds, teamId),
     countMyAssets(projectIds),
     getProjectHealth(projectIds),
+    listUpcomingMeetings(viewTeamIds),
+    listOpenMeetingActions(viewTeamIds),
   ]);
 
   const members = teamIds.length
@@ -205,6 +245,8 @@ export async function getDashboardData(actorId: string, teamId?: string | null) 
     },
     activity,
     todos,
+    upcomingMeetings,
+    meetingActions,
     reminders: reminderData.items.filter((item) => !teamId || item.teamId === teamId),
   };
 }

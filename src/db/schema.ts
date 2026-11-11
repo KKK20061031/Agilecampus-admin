@@ -255,6 +255,7 @@ export const tasks = pgTable(
     assigneeId: uuid("assignee_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    sourceMessageId: uuid("source_message_id").references(() => chatMessages.id, { onDelete: "set null" }),
     createdById: uuid("created_by_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -271,6 +272,7 @@ export const tasks = pgTable(
     index("tasks_assignee_idx").on(t.assigneeId),
     index("tasks_parent_idx").on(t.parentTaskId),
     index("tasks_iteration_idx").on(t.iterationId),
+    uniqueIndex("tasks_source_message_unique").on(t.sourceMessageId).where(sql`${t.sourceMessageId} IS NOT NULL`),
   ],
 );
 

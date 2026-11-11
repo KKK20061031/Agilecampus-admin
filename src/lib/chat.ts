@@ -4,6 +4,7 @@ import {
   chatMessages,
   chatRoomMembers,
   chatRooms,
+  tasks,
   projects,
   teamMembers,
   teams,
@@ -245,9 +246,12 @@ export async function listRoomMessages(
       senderName: users.name,
       content: chatMessages.content,
       createdAt: chatMessages.createdAt,
+      taskId: tasks.id,
+      taskProjectId: tasks.projectId,
     })
     .from(chatMessages)
     .innerJoin(users, eq(chatMessages.senderId, users.id))
+    .leftJoin(tasks, eq(tasks.sourceMessageId, chatMessages.id))
     .where(eq(chatMessages.roomId, roomId))
     .orderBy(chatMessages.createdAt);
 
@@ -343,7 +347,7 @@ export async function getRoomMeta(actorId: string, roomId: string) {
     const [other] = otherId
       ? await db.select({ name: users.name }).from(users).where(eq(users.id, otherId))
       : [];
-    return { id: room.id, type: "dm" as const, title: other?.name ?? "私聊", canManageImportant: false };
+    return { id: room.id, type: "dm" as const, title: other?.name ?? "私聊", canManageImportant: false, canCreateTask: false };
   }
   const [project] = await db
     .select({ name: projects.name, teamName: teams.name, teamId: projects.teamId })
@@ -356,6 +360,7 @@ export async function getRoomMeta(actorId: string, roomId: string) {
     type: "group" as const,
     title: `${project?.name ?? "?"}-${project?.teamName ?? "?"}`,
     canManageImportant: member?.role === "admin",
+    canCreateTask: member?.role === "admin" || member?.role === "student",
   };
 }
 

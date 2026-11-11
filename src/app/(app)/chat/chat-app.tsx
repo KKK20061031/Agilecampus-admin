@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "./avatar";
 import { sortRooms, type MessageSortMode } from "@/lib/message-sort";
@@ -37,6 +38,8 @@ type Message = {
   mine: boolean;
   flags?: MessageFlags;
   readBy?: { id: string; name: string }[];
+  taskId?: string | null;
+  taskProjectId?: string | null;
 };
 
 type Member = { id: string; name: string };
@@ -51,7 +54,7 @@ type PublicProfile = {
   personalEmail: string | null;
 };
 
-type Room = { roomId: string; title: string; type: "group" | "dm"; canManageImportant?: boolean };
+type Room = { roomId: string; title: string; type: "group" | "dm"; canManageImportant?: boolean; canCreateTask?: boolean };
 
 const POLL_MS = 4000;
 
@@ -114,6 +117,12 @@ export function ChatApp({
   const [profileData, setProfileData] = useState<PublicProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [taskMessage, setTaskMessage] = useState<Message | null>(null);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskAssigneeId, setTaskAssigneeId] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskPending, setTaskPending] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
   const profileRequest = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +189,48 @@ export function ChatApp({
     }
   }
 
+  function openConvertTask(message: Message) {
+    const firstLine = message.content.split("\n", 1)[0].trim();
+    setTaskMessage(message);
+    setTaskTitle(firstLine.slice(0, 180) || "群聊消息任务");
+    setTaskAssigneeId("");
+    setTaskDueDate("");
+    setTaskError(null);
+  }
+
+  async function convertMessageToTask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!taskMessage || taskPending) return;
+    setTaskPending(true);
+    setTaskError(null);
+    try {
+      const res = await fetch("/api/messages/convert-to-task", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId: taskMessage.id,
+          title: taskTitle,
+          assigneeIds: taskAssigneeId ? [taskAssigneeId] : [],
+          dueDate: taskDueDate,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTaskError(data.error ?? "转换失败，请重试");
+        return;
+      }
+      setMessages((list) => list.map((message) => message.id === taskMessage.id
+        ? { ...message, taskId: data.task.id, taskProjectId: data.task.projectId }
+        : message));
+      setTaskMessage(null);
+      router.refresh();
+    } catch {
+      setTaskError("网络异常，请重试");
+    } finally {
+      setTaskPending(false);
+    }
+  }
+
   // 深链：从通知「群聊提及」跳来时按 roomId 自动打开对应会话
   useEffect(() => {
     if (!initialRoomId || selected) return;
@@ -195,6 +246,7 @@ export function ChatApp({
             title: data.room.title,
             type: data.room.type,
             canManageImportant: data.room.canManageImportant,
+            canCreateTask: data.room.canCreateTask,
           });
           setMembers(data.members ?? []);
           clearUnread(data.room.id);
@@ -239,7 +291,7 @@ export function ChatApp({
         if (data.room) {
           setSelected((prev) =>
             prev && prev.roomId === data.room.id
-              ? { ...prev, canManageImportant: data.room.canManageImportant }
+              ? { ...prev, canManageImportant: data.room.canManageImportant, canCreateTask: data.room.canCreateTask }
               : prev,
           );
         }
@@ -694,7 +746,7 @@ export function ChatApp({
                       />
                     )}
                     {/* 消息操作：收藏（所有人）/ 标记重要（仅组长） */}
-                    <div className="mt-1 flex items-center gap-2 text-xs opacity-0 transition-opacity group-hover/msg:opacity-100">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
                       <button
                         type="button"
                         onClick={() => toggleMessageFlag(m.id, "saved", !m.flags?.savedByMe)}
@@ -711,6 +763,15 @@ export function ChatApp({
                           {m.flags?.isImportant ? "取消重要" : "标为重要"}
                         </button>
                       )}
+                      {selected.type === "group" && (m.taskId && m.taskProjectId ? (
+                        <Link href={`/projects/${m.taskProjectId}?task=${m.taskId}`} className="text-done hover:underline">
+                          已转为任务 · 查看
+                        </Link>
+                      ) : selected.canCreateTask ? (
+                        <button type="button" onClick={() => openConvertTask(m)} className="text-ink-soft hover:text-primary">
+                          转为任务
+                        </button>
+                      ) : null)}
                     </div>
                   </div>
                 </div>
@@ -808,6 +869,41 @@ export function ChatApp({
               className="ac-btn w-full"
             >发起私聊</button>
           </div>
+        </div>
+      )}
+
+      {taskMessage && (
+        <div role="dialog" aria-modal="true" aria-labelledby="convert-task-title" className="fixed inset-0 z-50 flex items-start justify-center bg-ink/45 p-4 sm:items-center" onKeyDown={(event) => { if (event.key === "Escape" && !taskPending) setTaskMessage(null); }}>
+          <form onSubmit={(event) => void convertMessageToTask(event)} className="max-h-[calc(100vh-2rem)] w-full max-w-lg space-y-4 overflow-y-auto rounded-field bg-surface p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="convert-task-title" className="font-display text-lg font-semibold text-ink">将群聊消息转为任务</h2>
+                <p className="mt-1 text-xs text-ink-faint">消息内容会保留在任务说明中。</p>
+              </div>
+              <button type="button" disabled={taskPending} onClick={() => setTaskMessage(null)} aria-label="关闭" className="text-xl text-ink-soft">×</button>
+            </div>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium text-ink">任务标题</span>
+              <input required maxLength={180} value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} className="ac-field w-full" />
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium text-ink">负责人</span>
+              <select value={taskAssigneeId} onChange={(event) => setTaskAssigneeId(event.target.value)} className="ac-field w-full">
+                <option value="">暂不指派</option>
+                {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+              </select>
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium text-ink">截止日期</span>
+              <input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} className="ac-field w-full" />
+            </label>
+            <blockquote className="max-h-28 overflow-y-auto whitespace-pre-wrap rounded bg-sunken/60 p-3 text-xs text-ink-soft">{taskMessage.content}</blockquote>
+            {taskError && <p role="alert" className="text-sm text-high">{taskError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" disabled={taskPending} onClick={() => setTaskMessage(null)} className="ac-btn-ghost">取消</button>
+              <button disabled={taskPending || !taskTitle.trim()} className="ac-btn">{taskPending ? "创建中…" : "创建任务"}</button>
+            </div>
+          </form>
         </div>
       )}
     </div>

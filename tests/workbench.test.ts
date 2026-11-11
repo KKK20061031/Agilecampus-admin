@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { assets, documents, projects, taskAssignees, taskDependencies, taskEvents, tasks, teamMembers, teams, users } from "@/db/schema";
+import { assets, documents, meetingActionItems, projects, taskAssignees, taskDependencies, taskEvents, tasks, teamMeetings, teamMembers, teams, users } from "@/db/schema";
 import { getDashboardData, listMyTasks } from "@/lib/dashboard";
 import { getWorkbenchReminders } from "@/lib/workbench-reminders";
 import { getWorkbenchScope } from "@/lib/workbench";
@@ -100,6 +100,27 @@ describe("工作台真实数据库回归（须独立 *_test 库）", () => {
     expect(await listMyTasks(actor.id, empty.id)).toEqual([]);
   });
 
+  it("工作台显示近期会议和待办行动项，并跟随小组筛选", async () => {
+    const { actor, student, a, b } = await scene();
+    const [meetingA, meetingB] = await db.insert(teamMeetings).values([
+      { teamId: a.id, title: "甲组周会", startsAt: new Date(Date.now() + 2 * 86_400_000), timeZone: "Asia/Shanghai" },
+      { teamId: b.id, title: "乙组周会", startsAt: new Date(Date.now() + 3 * 86_400_000), timeZone: "Asia/Shanghai" },
+    ]).returning();
+    await db.insert(meetingActionItems).values([
+      { meetingId: meetingA.id, title: "完成用户访谈", assigneeId: student.id, dueDate: day(2) },
+      { meetingId: meetingB.id, title: "整理竞品截图", assigneeId: actor.id, dueDate: day(3) },
+    ]);
+
+    const all = await getDashboardData(actor.id);
+    expect(all.upcomingMeetings.map((meeting) => meeting.title)).toEqual(["甲组周会", "乙组周会"]);
+    expect(all.meetingActions.map((item) => item.title)).toEqual(["完成用户访谈", "整理竞品截图"]);
+    expect(all.meetingActions[0].assigneeName).toBe("普通成员");
+
+    const focused = await getDashboardData(actor.id, a.id);
+    expect(focused.upcomingMeetings.map((meeting) => meeting.title)).toEqual(["甲组周会"]);
+    expect(focused.meetingActions.map((item) => item.title)).toEqual(["完成用户访谈"]);
+  });
+
   it("未加入的小组被拒绝；历史指派也不泄漏到全局任务或提醒", async () => {
     const { actor, foreign } = await scene();
     await expect(getDashboardData(actor.id, foreign.id)).rejects.toBeInstanceOf(ForbiddenError);
@@ -156,5 +177,6 @@ describe("工作台真实数据库回归（须独立 *_test 库）", () => {
     const own = await getWorkbenchReminders(student.id);
     expect(own.items.map((t) => t.id)).toEqual([doing.id]);
     expect(own.items[0].urgent).toBe(false);
+    expect(own.items[0].assigneeNames).toEqual(["另一组组长", "当前用户", "普通成员"]);
   });
 });

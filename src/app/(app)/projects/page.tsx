@@ -21,7 +21,7 @@ export default async function WorkbenchPage({
   if (Array.isArray(sp.team)) notFound();
   const teamFilter = typeof sp.team === "string" ? sp.team : null;
 
-  const { teams, selectedTeam, totalProjectCount, projects, stats, activity, todos, reminders } = await getDashboardData(session.user.id, teamFilter).catch((error) => {
+  const { teams, selectedTeam, totalProjectCount, projects, stats, activity, todos, reminders, upcomingMeetings, meetingActions } = await getDashboardData(session.user.id, teamFilter).catch((error) => {
     if (error instanceof ForbiddenError) notFound();
     throw error;
   });
@@ -91,6 +91,7 @@ export default async function WorkbenchPage({
                       <div className="min-w-0">
                         <Link href={scopeHref(`/projects/${item.projectId}?task=${item.id}`)} className="font-medium text-ink hover:text-primary">{item.title}</Link>
                         <p className="text-xs text-ink-faint">{item.teamName} / {item.projectName}</p>
+                        <p className="text-xs text-ink-faint">负责人：{item.assigneeNames.join("、") || "未指派"}</p>
                       </div>
                       <span className={`text-xs ${item.state === "overdue" ? "text-alert" : "text-accent"}`}>{item.state === "overdue" ? "已逾期" : "即将到期"} · {item.dueDate}</span>
                     </li>
@@ -202,12 +203,67 @@ export default async function WorkbenchPage({
                   </ul>
                 )}
               </Panel>
+
+              <Panel title="需要关注" link={scopeHref("/projects?attention=due")}>
+                {reminders.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-ink-faint">目前没有临期或逾期任务</p>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {reminders.slice(0, 5).map((item) => (
+                      <li key={item.id} className="py-2.5">
+                        <Link href={scopeHref(`/projects/${item.projectId}?task=${item.id}`)} className="block truncate text-[13px] font-medium text-ink hover:text-primary">{item.title}</Link>
+                        <p className="mt-0.5 text-[11px] text-ink-faint">负责人：{item.assigneeNames.join("、") || "未指派"} · {item.teamName} / {item.projectName}</p>
+                        <p className={`mt-0.5 text-[11px] ${item.state === "overdue" ? "text-alert" : "text-accent"}`}>{item.state === "overdue" ? "已逾期" : "即将到期"} · {item.dueDate}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+
+              <Panel title="待完成行动项">
+                {meetingActions.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-ink-faint">没有待完成的会议行动项</p>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {meetingActions.map((item) => (
+                      <li key={item.id} className="py-2.5">
+                        <Link href={`/teams/${item.teamId}/meetings`} className="block truncate text-[13px] font-medium text-ink hover:text-primary">{item.title}</Link>
+                        <p className="mt-0.5 truncate text-[11px] text-ink-faint">{item.meetingTitle} · {item.teamName}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-faint">负责人：{item.assigneeName ?? "未指派"} · {item.dueDate ?? "未设截止日期"}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+
+              <Panel title="近期会议">
+                {upcomingMeetings.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-ink-faint">暂时没有已安排的会议</p>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {upcomingMeetings.map((meeting) => (
+                      <li key={meeting.id} className="py-2.5">
+                        <Link href={`/teams/${meeting.teamId}/meetings`} className="block truncate text-[13px] font-medium text-ink hover:text-primary">{meeting.title}</Link>
+                        <p className="mt-0.5 text-[11px] text-ink-faint">{meeting.teamName} · {formatMeetingTime(meeting.startsAt, meeting.timeZone)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
             </aside>
           </div>
         </>
       )}
     </main>
   );
+}
+
+function formatMeetingTime(date: Date, timeZone: string) {
+  try {
+    return new Intl.DateTimeFormat("zh-CN", { timeZone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+  }
 }
 
 function KpiCard({

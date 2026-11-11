@@ -1,9 +1,9 @@
 import { cache } from "react";
 import { and, asc, eq, isNotNull, lte, ne, or } from "drizzle-orm";
 import { db } from "@/db";
-import { projects, tasks, teamMembers, teams } from "@/db/schema";
+import { projects, tasks, teamMembers, teams, users } from "@/db/schema";
 import { classifyDue, DUE_SOON_DAYS, toDayString, todayStartMs } from "./due";
-import { isAssigneeOf } from "./task";
+import { assigneesByTask, isAssigneeOf } from "./task";
 
 export type TeamReminderSummary = {
   teamId: string;
@@ -25,6 +25,7 @@ export const getWorkbenchReminders = cache(async (actorId: string) => {
       dueDate: tasks.dueDate,
       priority: tasks.priority,
       status: tasks.status,
+      assigneeName: users.name,
       projectId: projects.id,
       projectName: projects.name,
       teamId: teams.id,
@@ -34,6 +35,7 @@ export const getWorkbenchReminders = cache(async (actorId: string) => {
     .innerJoin(projects, eq(tasks.projectId, projects.id))
     .innerJoin(teams, eq(projects.teamId, teams.id))
     .innerJoin(teamMembers, and(eq(teamMembers.teamId, teams.id), eq(teamMembers.userId, actorId)))
+    .leftJoin(users, eq(tasks.assigneeId, users.id))
     .where(and(
       or(isAssigneeOf(actorId), eq(teamMembers.role, "admin")),
       ne(tasks.status, "done"),
@@ -42,6 +44,7 @@ export const getWorkbenchReminders = cache(async (actorId: string) => {
     ))
     .orderBy(asc(tasks.dueDate), asc(tasks.id));
 
+  const assignees = await assigneesByTask(rows.map((row) => row.id));
   const byTeam = new Map<string, TeamReminderSummary>();
   const items = rows.flatMap((row) => {
     const state = classifyDue(row.dueDate, row.status, todayMs);
@@ -54,7 +57,9 @@ export const getWorkbenchReminders = cache(async (actorId: string) => {
     else summary.dueSoon++;
     if (urgent) summary.urgent++;
     byTeam.set(row.teamId, summary);
-    return [{ ...row, state, urgent }];
+    const names = assignees.get(row.id)?.map((assignee) => assignee.name) ?? [];
+    if (names.length === 0 && row.assigneeName) names.push(row.assigneeName);
+    return [{ ...row, assigneeNames: names, state, urgent }];
   });
   return { byTeam: [...byTeam.values()], items };
 });
