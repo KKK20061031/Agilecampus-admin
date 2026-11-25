@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { AppError, ForbiddenError } from "./errors";
 import { getTeamMembership } from "./team";
+import { notifyTeamMembers } from "./notification";
 
 export const PROPOSAL_CATEGORY_LABELS: Record<ProposalCategory, string> = {
   topic: "选题",
@@ -200,7 +201,7 @@ export async function createProposalPoll(actorId: string, teamId: string, input:
   const labels = normalizedOptions.map((option) => option.label.toLocaleLowerCase());
   if (new Set(labels).size !== labels.length) throw new AppError("选项名称不能重复");
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [poll] = await tx
       .insert(proposalPolls)
       .values({
@@ -226,6 +227,21 @@ export async function createProposalPoll(actorId: string, teamId: string, input:
       .returning();
     return { poll, options };
   });
+
+  // 投票发布 → 通知团队全员（截至时间若有则一并提示），发起人本人已读
+  const [actor] = await db.select({ name: users.name }).from(users).where(eq(users.id, actorId));
+  await notifyTeamMembers({
+    teamId,
+    actorId,
+    title: "新群投票",
+    content: `${actor?.name ?? "有人"} 发起了${PROPOSAL_CATEGORY_LABELS[data.category]}投票「${data.title}」${
+      closesAt ? `，截止 ${closesAt.toLocaleString("zh-CN")}` : ""
+    }`,
+    type: "poll_created",
+    linkUrl: `/teams/${teamId}/votes`,
+  });
+
+  return result;
 }
 
 export async function castProposalVote(actorId: string, pollId: string, input: unknown) {

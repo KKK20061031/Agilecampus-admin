@@ -59,6 +59,9 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
   });
   const [filter, setFilter] = useState("all");
   const [editing, setEditing] = useState<Assignment | "new" | null>(null);
+  // 双击某天/点「添加」时记录目标日期：作为弹窗默认截止时间，并作为弹窗 key 的一部分，
+  // 保证连续为不同日期新建时 defaultValue 会重置（否则二次打开仍带第一次的日期）。
+  const [newDueDate, setNewDueDate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = dayKey(new Date());
@@ -96,6 +99,13 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
       current.setDate(Math.min(day, new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate()));
       setSelected(dayKey(current));
     } else setSelected(dayKey(addDays(current, direction * 7)));
+  }
+
+  // 打开新建弹窗（单次点击「添加课程作业」或双击日历格子），预填目标日期
+  function openNew(date: string) {
+    setNewDueDate(date);
+    setEditing("new");
+    setError(null);
   }
 
   async function save(form: HTMLFormElement) {
@@ -150,7 +160,7 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
     <header className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="font-display text-2xl font-semibold text-ink">截止日历</h1>
         <p className="mt-1 text-sm text-ink-soft">{coming} 项未来 7 天到期 · {overdue} 项已逾期</p></div>
-      <button type="button" onClick={() => { setEditing("new"); setError(null); }} className="ac-btn">添加课程作业</button>
+      <button type="button" onClick={() => openNew(selected)} className="ac-btn">添加课程作业</button>
     </header>
 
     <nav aria-label="小组筛选" className="flex flex-wrap gap-2 text-sm">
@@ -185,6 +195,8 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
           const dayItems = byDay.get(date) ?? [];
           const otherMonth = mode === "month" && localDate(date).getMonth() !== localDate(selected).getMonth();
           return <button key={date} type="button" onClick={() => setSelected(date)}
+            onDoubleClick={() => openNew(date)}
+            title="单击选中，双击新建该日截止"
             aria-label={`${date}，${dayItems.length} 项截止`} aria-pressed={date === selected}
             className={`min-h-16 min-w-0 border-r border-t border-line p-1 text-left align-top transition-colors hover:bg-primary-soft sm:min-h-24 sm:p-2 ${date === selected ? "bg-primary-soft" : ""} ${otherMonth ? "bg-sunken/50 text-ink-faint" : ""}`}>
             <span className={`inline-grid h-6 w-6 place-items-center rounded-full text-xs ${date === today ? "bg-primary text-white" : ""}`}>{Number(date.slice(8))}</span>
@@ -214,13 +226,13 @@ export function DeadlineCalendar({ initial, teamId, focusedAssignment }: {
 
     {error && !editing && <p role="alert" className="text-sm text-high">{error}</p>}
     {editing && <div role="dialog" aria-modal="true" aria-labelledby="assignment-dialog-title" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/45 p-4 sm:items-center">
-      <form key={editing === "new" ? "new" : editing.id} onSubmit={(event) => { event.preventDefault(); void save(event.currentTarget); }} className="w-full max-w-md space-y-4 rounded bg-surface p-5 shadow-xl">
+      <form key={editing === "new" ? `new-${newDueDate}` : editing.id} onSubmit={(event) => { event.preventDefault(); void save(event.currentTarget); }} className="w-full max-w-md space-y-4 rounded bg-surface p-5 shadow-xl">
         <div className="flex items-center justify-between"><h2 id="assignment-dialog-title" className="text-lg font-semibold text-ink">{editing === "new" ? "添加课程作业" : "编辑课程作业"}</h2>
           <button type="button" aria-label="关闭" onClick={() => setEditing(null)} className="text-xl text-ink-soft">×</button></div>
         <label className="block space-y-1 text-sm text-ink-soft">课程名称<input name="courseName" required maxLength={80} defaultValue={editing === "new" ? "" : editing.courseName} className="ac-field" /></label>
         <fieldset className="space-y-2"><legend className="text-sm text-ink-soft">课程颜色</legend><div className="flex flex-wrap gap-2">{COURSE_COLORS.map((color) => <label key={color.value} title={color.label} className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-line"><input className="sr-only peer" type="radio" name="color" value={color.value} aria-label={color.label} defaultChecked={editing === "new" ? color.value === "blue" : editing.color === color.value} /><span className={`h-5 w-5 rounded-full ${color.swatch} peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-ink`} /></label>)}</div></fieldset>
         <label className="block space-y-1 text-sm text-ink-soft">作业名称<input name="title" required maxLength={160} defaultValue={editing === "new" ? "" : editing.title} className="ac-field" /></label>
-        <label className="block space-y-1 text-sm text-ink-soft">截止时间<input name="dueAt" type="datetime-local" required defaultValue={editing === "new" ? `${selected}T23:59` : dateTimeInput(editing.dueAt)} className="ac-field" /></label>
+        <label className="block space-y-1 text-sm text-ink-soft">截止时间<input name="dueAt" type="datetime-local" required defaultValue={editing === "new" ? `${newDueDate ?? selected}T23:59` : dateTimeInput(editing.dueAt)} className="ac-field" /></label>
         <label className="block space-y-1 text-sm text-ink-soft">备注<textarea name="details" maxLength={2000} rows={2} defaultValue={editing === "new" ? "" : editing.details ?? ""} className="ac-field" /></label>
         <fieldset className="space-y-2"><legend className="text-sm text-ink-soft">站内提醒</legend><div className="flex flex-wrap gap-4 text-sm text-ink">
           {[7, 3, 1].map((days) => <label key={days} className="flex items-center gap-1.5"><input type="checkbox" name={`remind${days}`} defaultChecked={editing === "new" || editing.remindDays.includes(days)} className="accent-primary" />提前 {days} 天</label>)}

@@ -7,6 +7,7 @@ import { BackButton } from "@/components/back-button";
 import { getWorkbenchScope } from "@/lib/workbench";
 import { scopedHref } from "@/lib/workbench-navigation";
 import { ForbiddenError } from "@/lib/errors";
+import { TaskCheck } from "./task-check";
 
 const STATUS_LABEL: Record<string, string> = { todo: "待办", doing: "进行中", done: "已完成" };
 
@@ -89,6 +90,7 @@ export default async function MyTasksPage({
             const overdue = !!t.dueDate && t.dueDate < today;
             return (
               <li key={t.id} className="ac-card flex flex-wrap items-center gap-3 p-4">
+                <TaskCheck taskId={t.id} projectId={t.projectId} status={t.status} />
                 <div className="min-w-0 flex-1">
                   <Link
                     href={href(`/projects/${t.projectId}?task=${t.id}`)}

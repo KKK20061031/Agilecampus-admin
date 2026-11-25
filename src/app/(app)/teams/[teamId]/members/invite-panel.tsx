@@ -6,6 +6,7 @@ import {
   revokeInviteLinkAction,
   type CreateLinkState,
 } from "./actions";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export type InviteLinkRow = {
   id: string;
@@ -33,8 +34,13 @@ export function InvitePanel({
   const [copied, setCopied] = useState(false);
 
   async function copyLink(url: string) {
-    const abs = `${window.location.origin}${url}`;
-    await navigator.clipboard.writeText(abs);
+    // 局域网 HTTP 下 navigator.clipboard 不存在，copyTextToClipboard 内含 execCommand 降级
+    const ok = await copyTextToClipboard(`${window.location.origin}${url}`);
+    if (!ok) {
+      // 降级也失败：退而选中文本提示用户手动复制
+      window.prompt("复制失败，请手动复制以下链接：", `${window.location.origin}${url}`);
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }

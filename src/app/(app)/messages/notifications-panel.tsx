@@ -27,6 +27,13 @@ const TYPE_LABEL: Record<string, string> = {
   asset_created: "新资产",
   chat_mentioned: "群聊提及",
   course_assignment_due: "课程作业",
+  team_join_requested: "入组申请",
+  team_join_approved: "入组通过",
+  team_join_rejected: "入组拒绝",
+  weekly_report_published: "周报发布",
+  meeting_created: "新会议",
+  meeting_action_assigned: "行动项指派",
+  poll_created: "群投票",
 };
 
 // 这些类型的通知在副标题里展示操作者（公告另走「发布者」）
@@ -38,6 +45,9 @@ const SHOW_ACTOR = new Set([
   "resource_ended",
   "asset_created",
   "chat_mentioned",
+  "meeting_created",
+  "meeting_action_assigned",
+  "poll_created",
 ]);
 
 type Items = Awaited<ReturnType<typeof listNotifications>>;

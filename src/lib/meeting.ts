@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { meetingActionItems, teamMeetings, users } from "@/db/schema";
 import { AppError, ForbiddenError } from "./errors";
 import { getTeamMembership } from "./team";
+import { createNotification, notifyTeamMembers } from "./notification";
 
 const meetingFields = {
   title: z.string().trim().min(1, "请填写会议名称").max(140),
@@ -52,6 +53,11 @@ function parseStartsAt(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) throw new AppError("会议时间无效");
   return date;
+}
+
+async function userName(userId: string) {
+  const [row] = await db.select({ name: users.name }).from(users).where(eq(users.id, userId));
+  return row?.name ?? "有人";
 }
 
 export async function listTeamMeetings(actorId: string, teamId: string) {
@@ -111,6 +117,19 @@ export async function createTeamMeeting(actorId: string, teamId: string, input: 
     agenda: data.agenda,
     minutes: data.minutes,
   }).returning();
+
+  // 会议发布 → 通知团队全员（含时间与地点摘要），本人已读
+  const actorName = await userName(actorId);
+  await notifyTeamMembers({
+    teamId,
+    actorId,
+    title: "新会议",
+    content: `${actorName} 发布了会议「${data.title}」${
+      data.location ? `（${data.location}）` : ""
+    }，${startsAt.toLocaleString("zh-CN", { timeZone: data.timeZone })}`,
+    type: "meeting_created",
+    linkUrl: `/teams/${teamId}/meetings`,
+  });
   return meeting;
 }
 
@@ -151,6 +170,21 @@ export async function createMeetingActionItem(actorId: string, meetingId: string
     details: data.details,
     dueDate: data.dueDate ?? null,
   }).returning();
+
+  // 行动项指派 → 通知负责人（不指派或指派给自己则不发）
+  if (item.assigneeId && item.assigneeId !== actorId) {
+    const actorName = await userName(actorId);
+    await createNotification({
+      userId: item.assigneeId,
+      title: "会议行动项",
+      content: `${actorName} 在会议「${meeting.title}」中给你指派了行动项「${data.title}」${
+        data.dueDate ? `，截止 ${data.dueDate}` : ""
+      }`,
+      type: "meeting_action_assigned",
+      linkUrl: `/teams/${meeting.teamId}/meetings`,
+      actorId,
+    });
+  }
   return item;
 }
 

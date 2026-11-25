@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createTokenAction, revokeTokenAction, type CreateTokenState } from "./actions";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export interface TokenRow {
   id: string;
@@ -92,13 +93,15 @@ function RevealBox({ token, name }: { token: string; name: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    try {
-      await navigator.clipboard.writeText(token);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
+    // 局域网 HTTP 下 navigator.clipboard 不存在，走 copyTextToClipboard 的 execCommand 降级
+    const ok = await copyTextToClipboard(token);
+    if (!ok) {
+      window.prompt("复制失败，请手动复制令牌：", token);
       setCopied(false);
+      return;
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
   }
 
   return (

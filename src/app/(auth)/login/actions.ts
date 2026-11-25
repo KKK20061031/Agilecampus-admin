@@ -26,6 +26,19 @@ export async function loginAction(
     return null;
   } catch (e) {
     if (e instanceof AuthError) return { error: "账号（邮箱/学号）或密码不正确" };
-    throw e; // signIn 成功时抛出的 redirect 必须继续上抛
+    // signIn 成功时 next-auth 抛 NEXT_REDIRECT 错误，必须继续上抛让框架完成跳转
+    if (
+      typeof e === "object"
+      && e !== null
+      && "digest" in e
+      && typeof (e as { digest: unknown }).digest === "string"
+      && (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+    ) {
+      throw e;
+    }
+    // 其余异常（数据库连接失败、连接池耗尽等）不再上抛：上抛会触发整页错误甚至白屏，
+    // 改为返回友好提示，同时服务端记录原始错误便于排查。
+    console.error("[login] 登录过程发生异常", e);
+    return { error: "登录失败，请稍后重试或联系管理员" };
   }
 }

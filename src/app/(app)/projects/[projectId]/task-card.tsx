@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useDraggable } from "@dnd-kit/core";
 import {
@@ -45,15 +45,22 @@ export function TaskCard({
   dependencies: { predecessorId: string; successorId: string }[];
 }) {
   const [editing, setEditing] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
-  // 深链 /projects/[id]?task=<taskId>：命中本卡片则打开详情弹窗（仅 canWrite 有 EditModal）。
-  // 于渲染期调整而非 useEffect：避免多渲染一轮，且用户手动关闭后不会被 effect 重开。
-  const deepLinked = canWrite && searchParams.get("task") === task.id;
+  // 深链 /projects/[id]?task=<taskId>：命中本卡片则高亮并滚动到可视区；
+  // canWrite 用户同时自动打开详情弹窗。高亮对所有角色生效（只读成员也能定位到任务）。
+  const highlighted = searchParams.get("task") === task.id;
+  const deepLinked = canWrite && highlighted;
   const [prevDeepLinked, setPrevDeepLinked] = useState(false);
   if (deepLinked !== prevDeepLinked) {
     setPrevDeepLinked(deepLinked);
     if (deepLinked) setEditing(true);
   }
+  useEffect(() => {
+    if (highlighted) {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlighted]);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     disabled: !canWrite || editing,
@@ -78,7 +85,10 @@ export function TaskCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        cardRef.current = node;
+      }}
       style={
         transform
           ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
@@ -90,7 +100,9 @@ export function TaskCard({
           : dueState === "soon"
             ? "border-medium"
             : ""
-      } ${isDragging ? "opacity-50" : ""}`}
+      } ${isDragging ? "opacity-50" : ""} ${
+        highlighted ? "ring-2 ring-primary bg-primary-soft/40" : ""
+      }`}
     >
       <div
         {...listeners}
@@ -341,40 +353,26 @@ function EditModal({
 
           {allLabels.length > 0 && (
             <Field label="标签（可多选）">
-              <select
-                multiple
+              <ChipMultiSelect
                 name="labelIds"
-                defaultValue={task.labels.map((l) => l.id)}
-                className="ac-field text-sm"
-                size={Math.min(4, Math.max(2, allLabels.length))}
-              >
-                {allLabels.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
+                items={allLabels.map((l) => ({ id: l.id, label: l.name }))}
+                defaultSelected={task.labels.map((l) => l.id)}
+                emptyHint="未选择即无标签"
+              />
             </Field>
           )}
 
           <Field label="后置任务（可多选）">
-            <select
-              multiple
+            <ChipMultiSelect
               name="successorIds"
-              defaultValue={dependencies
+              items={allTasks
+                .filter((t) => t.id !== task.id)
+                .map((t) => ({ id: t.id, label: t.title }))}
+              defaultSelected={dependencies
                 .filter((d) => d.predecessorId === task.id)
                 .map((d) => d.successorId)}
-              className="ac-field text-sm"
-              size={Math.min(4, Math.max(2, allTasks.length - 1))}
-            >
-              {allTasks
-                .filter((t) => t.id !== task.id)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                  </option>
-                ))}
-            </select>
+              emptyHint="未选择即无后置任务"
+            />
           </Field>
 
           {updateError && <p className="text-sm text-high">{updateError}</p>}
@@ -420,5 +418,65 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="text-xs font-medium text-ink-soft">{label}</span>
       {children}
     </label>
+  );
+}
+
+// 芯片式多选（用于后置任务 / 标签）。不用 <select multiple>：Windows 上需按住 Ctrl 点选，
+// 用户普遍以为只能选一个。选中项渲染同名隐藏字段，服务端用 formData.getAll 收集
+//（actions.ts 对 successorIds / labelIds 均为 getAll，空选即清空）。
+function ChipMultiSelect({
+  name,
+  items,
+  defaultSelected,
+  emptyHint,
+}: {
+  name: string;
+  items: { id: string; label: string }[];
+  defaultSelected?: string[];
+  emptyHint?: string;
+}) {
+  const [selected, setSelected] = useState<string[]>(defaultSelected ?? []);
+
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const chosen = items.filter((i) => selected.includes(i.id));
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item) => {
+          const on = selected.includes(item.id);
+          return (
+            <button
+              type="button"
+              key={item.id}
+              onClick={() => toggle(item.id)}
+              aria-pressed={on}
+              title={on ? `取消选择「${item.label}」` : `选择「${item.label}」`}
+              className={`max-w-full truncate rounded-full border px-2.5 py-1 text-xs transition ${
+                on
+                  ? "border-primary bg-primary font-medium text-white"
+                  : "border-line-strong bg-surface text-ink-soft hover:border-primary hover:text-primary"
+              }`}
+            >
+              <span aria-hidden className="mr-0.5">{on ? "✓" : "+"}</span>
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 表单提交用：每个选中项一个同名隐藏字段 */}
+      {selected.map((id) => (
+        <input key={id} type="hidden" name={name} value={id} />
+      ))}
+
+      <p className="text-xs text-ink-faint">
+        {chosen.length === 0
+          ? emptyHint ?? "未选择任何项"
+          : `已选 ${chosen.length} 项：${chosen.map((i) => i.label).join("、")}`}
+      </p>
+    </div>
   );
 }

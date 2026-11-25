@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { createTeamAction, joinTeamAction, type FormState } from "./actions";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export function TeamForms() {
   const [createState, createFormAction, creating] = useActionState<FormState, FormData>(
@@ -41,11 +42,13 @@ export function CopyInviteCode({ code }: { code: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
 
   async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(code);
-      setStatus("copied");
-    } catch {
+    // 局域网 HTTP 下 navigator.clipboard 不存在，走 copyTextToClipboard 的 execCommand 降级
+    const ok = await copyTextToClipboard(code);
+    if (!ok) {
+      window.prompt("复制失败，请手动复制邀请码：", code);
       setStatus("error");
+    } else {
+      setStatus("copied");
     }
     window.setTimeout(() => setStatus("idle"), 1800);
   }

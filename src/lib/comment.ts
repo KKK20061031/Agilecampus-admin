@@ -53,12 +53,20 @@ export async function createTaskComment(actorId: string, taskId: string, content
     return created;
   });
 
+  // 除负责人/创建者外，此前评论过该任务的人也应收到通知（参与讨论即关注）
+  const priorCommenters = await db
+    .selectDistinct({ authorId: taskComments.authorId })
+    .from(taskComments)
+    .where(and(eq(taskComments.taskId, taskId), isNull(taskComments.deletedAt)));
+  const [author] = await db.select({ name: users.name }).from(users).where(eq(users.id, actorId));
+
   await notifyTaskParticipants({
     taskId,
     actorId,
     title: "任务有新评论",
-    content: `有人在任务“${task.title}”下发表了评论`,
+    content: `${author?.name ?? "有人"} 在任务「${task.title}」下发表了评论`,
     type: "task_commented",
+    extraUserIds: priorCommenters.map((c) => c.authorId),
   });
   return comment;
 }
